@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CareCoach – Patient Engagement Feedback App (CoE C28)</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f7f8fa;--card:#fff;--tx:#1a2230;--mu:#5d6b7d;--ac:#0b6e6e;--bd:#dde2e9;--ok:#1b7a3d;--wa:#a86400;--er:#b3261e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#11151b;--card:#1a2029;--tx:#e8edf3;--mu:#9aa7b7;--ac:#4fc3c3;--bd:#2c3644;--ok:#5fd18a;--wa:#f0b04a;--er:#ff8a80}}
+:root[data-theme="dark"]{--bg:#11151b;--card:#1a2029;--tx:#e8edf3;--mu:#9aa7b7;--ac:#4fc3c3;--bd:#2c3644;--ok:#5fd18a;--wa:#f0b04a;--er:#ff8a80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:920px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0}h2{font-size:17px;margin:0 0 8px}p.s{color:var(--mu);margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin:12px 0}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+nav button,.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 260px}
+.msg{border-left:5px solid var(--ac);padding:10px 12px;border-radius:6px;background:var(--bg);font-size:17px}
+.msg.warn{border-color:var(--wa)}.msg.urgent{border-color:var(--er)}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid var(--bd);color:var(--mu)}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--er);font-weight:600}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:left;vertical-align:top}
+label{display:block;margin:6px 0}select,input[type=range]{font:inherit;max-width:100%}
+details{margin:6px 0}summary{cursor:pointer;font-weight:600}
+.hide{display:none}small{color:var(--mu)}
+</style></head><body><main>
+<h1>CareCoach: patient-engagement feedback app</h1>
+<p class="s">CoE Growth Project · Batch C28 · Home blood-pressure monitoring scenario · all data is synthetic · prototype, not a medical device</p>
+<nav id="nav"></nav>
+
+<section id="t-app">
+<div class="row">
+<div class="card"><h2>Who is looking?</h2>
+<select id="role"><option value="patient">Patient</option><option value="clinician">Clinician</option><option value="admin">Programme admin</option></select>
+<h2 style="margin-top:12px">Patient consent</h2>
+<label><input type="checkbox" id="c1" checked> Use my readings to write my feedback</label>
+<label><input type="checkbox" id="c2" checked> Share my readings with my care team</label>
+<label><input type="checkbox" id="c3"> Include my data (de-identified) in programme statistics</label>
+<h2 style="margin-top:12px">Simulate a situation</h2>
+<select id="scn"><option value="none">Normal week</option><option value="missing">No readings for 9 days</option><option value="outlier">Impossible reading (sensor error)</option><option value="critical">Dangerous reading</option></select>
+<label>Week: <b id="wkv">8</b><br><input type="range" id="wk" min="1" max="8" value="8"></label>
+</div>
+<div class="card" id="view"></div>
+</div>
+</section>
+
+<section id="t-doc" class="hide"></section>
+<section id="t-exp" class="hide"></section>
+<section id="t-test" class="hide"></section>
+
+<script>
+const $=id=>document.getElementById(id);
+const GOAL=130;
+const DATA={sys:[152,149,147,146,141,138,136,133],adh:[4,5,5,6,6,6,7,6]};
+
+// ---------- feedback engine (prototype) ----------
+function feedback(s){ // s:{consent,week,sys,adh,daysSince,lastSys}
+ if(!s.consent) return {lvl:'info',rule:'no-consent',text:'You have chosen not to use your readings for feedback. Here is a general tip: taking your reading at the same time each day gives the clearest picture.'};
+ if(s.sys!=null&&(s.sys>=180||s.sys<=80)) return {lvl:'urgent',rule:'critical',text:'This reading needs attention today. Please call your care team now. If you feel unwell (chest pain, bad headache, trouble breathing), call emergency services.',flag:true};
+ if(s.sys!=null&&(s.sys>260||s.sys<50)) return {lvl:'warn',rule:'implausible',text:'That number looks wrong, maybe the cuff slipped. Please sit quietly for 5 minutes and measure again. We have told your care team so they can help.',flag:true};
+ if(s.daysSince>=7) return {lvl:'warn',rule:'missing',text:'We have not seen a reading for '+s.daysSince+' days, so we cannot say how you are doing. One reading today would help. It only takes a minute.',flag:false};
+ const d=s.sys-GOAL, t=s.lastSys!=null?s.sys-s.lastSys:0;
+ let a=d<=0?'Your blood pressure is now at your goal ('+GOAL+' or lower).':'Your blood pressure is '+d+' points above your goal of '+GOAL+'.';
+ let b=t<0?' It went down by '+(-t)+' since last week. Good progress.':t>0?' It went up by '+t+' since last week. That can happen; keep going.':' It is steady since last week.';
+ let c=' You took your tablets on '+s.adh+' of 7 days.'+(s.adh<7?' Try a phone alarm to catch the missed day.':' Well done.');
+ return {lvl:'ok',rule:'normal',text:a+b+c};
+}
+function baselineMsg(){return 'Your mean systolic BP is being monitored. Continue antihypertensive regimen and maintain lifestyle modification per clinician guidance.'}
+
+function svg(vals,goal){const W=300,H=110,mn=120,mx=160,x=i=>10+i*(W-20)/(vals.length-1||1),y=v=>H-8-(Math.min(mx,Math.max(mn,v))-mn)/(mx-mn)*(H-16);
+ return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Blood pressure trend"><line x1="0" x2="${W}" y1="${y(goal)}" y2="${y(goal)}" stroke="var(--ok)" stroke-dasharray="4"/><polyline fill="none" stroke="var(--ac)" stroke-width="2.5" points="${vals.map((v,i)=>x(i)+','+y(v)).join(' ')}"/>${vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="var(--ac)"/>`).join('')}</svg><small>Dashed line = your goal (${goal})</small>`}
+
+function state(){const w=+$('wk').value,sc=$('scn').value;let sys=DATA.sys[w-1],ds=1;
+ if(sc==='missing'){sys=null;ds=9}if(sc==='outlier')sys=412;if(sc==='critical')sys=196;
+ return {consent:$('c1').checked,share:$('c2').checked,stats:$('c3').checked,week:w,sys,adh:DATA.adh[w-1],daysSince:ds,lastSys:w>1?DATA.sys[w-2]:null,sc}}
+
+function render(){const s=state(),f=feedback(s),r=$('role').value;$('wkv').textContent=s.week;let h='';
+ if(r==='patient'){
+  h=`<h2>Your week ${s.week}</h2><div class="msg ${f.lvl==='urgent'?'urgent':f.lvl==='warn'?'warn':''}">${f.text}</div>`+
+   (s.consent?`<div style="margin-top:10px">${svg(DATA.sys.slice(0,s.week),GOAL)}</div>`:'<p><small>Trend hidden because you turned off feedback from your readings.</small></p>')+
+   `<p><span class="tag">Reading level: ~grade 6</span> <span class="tag">${s.share?'Care team can see your readings':'Care team cannot see your readings'}</span></p>
+   <details><summary>Quick check: did that make sense?</summary><p>Is your blood pressure above or below your goal?</p><button class="btn" onclick="this.nextElementSibling.textContent='Thanks, logged for comprehension tracking.'">${s.sys&&s.sys>GOAL?'Above':'At or below'}</button><span></span></details>`;
+ } else if(r==='clinician'){
+  if(!s.share) h=`<h2>Clinician view</h2><div class="msg warn">Patient has not consented to share readings. Only urgent safety flags are sent, without values.</div>`+(f.flag?`<p class="bad">⚠ Safety flag raised (details withheld pending consent).</p>`:'');
+  else h=`<h2>Clinician view</h2><div class="tw"><table><tr><th>Week</th><th>Systolic</th><th>Doses (of 7)</th><th>Flag</th></tr>${DATA.sys.slice(0,s.week).map((v,i)=>`<tr><td>${i+1}</td><td>${v}</td><td>${DATA.adh[i]}</td><td></td></tr>`).join('')}</table></div>
+   <p>Current: <b>${s.sys??'no reading'}</b> · rule fired: <span class="tag">${f.rule}</span> ${f.flag?'<b class="bad">⚠ needs review</b>':''}</p>
+   <p><small>Message shown to patient:</small></p><div class="msg">${f.text}</div>`;
+ } else {
+  h=`<h2>Admin view (aggregate only)</h2><p>No names, no readings. ${s.stats?'This patient is included in de-identified statistics.':'This patient is <b>excluded</b> from statistics (no consent).'}</p><table><tr><th>Metric</th><th>Value</th></tr><tr><td>Active patients (simulated)</td><td>200</td></tr><tr><td>Weekly active rate, wk 8</td><td id="adm"></td></tr><tr><td>Safety flags this week</td><td>3</td></tr></table>`;
+ }
+ $('view').innerHTML=h; if($('adm'))$('adm').textContent=(EXP.proto.eng[7]*100).toFixed(0)+'% (prototype arm)';}
+
+// ---------- simulation ----------
+function rng(s){return()=>(s=(s*1664525+1013904223)>>>0)/4294967296}
+function sim(seed,arm){const R=rng(seed),N=200,W=8,eng=Array(W).fill(0),cq=[0,0,0],cn=[0,0,0];let quizOK=0,quizN=0,adh=0,adhN=0,lows=[];
+ for(let i=0;i<N;i++){const lit=R(),e0=.55+.35*R(),g=lit<.33?0:lit<.66?1:2,diff=arm==='p'?.35:.65;let prev=1;
+  for(let w=0;w<W;w++){const p=arm==='p'?Math.min(.95,e0*Math.pow(.97,w)+.06):e0*Math.pow(.9,w);const a=R()<p;if(a)eng[w]++;
+   if(a){const pc=.25+.75/(1+Math.exp(-6*(lit-diff)));const ok=R()<pc;quizN++;cn[g]++;if(ok){quizOK++;cq[g]++}}
+   for(let d=0;d<7;d++){adhN++;if(R()<.55+.2*prev+(arm==='p'?.05:0))adh++}prev=a?1:0}}
+ return{eng:eng.map(x=>x/N),comp:quizOK/quizN,compN:quizN,adh:adh/adhN,tri:cq.map((x,i)=>x/cn[i])}}
+const EXP={base:sim(28,'b'),proto:sim(28,'p')};
+const ci=(p,n)=>1.96*Math.sqrt(p*(1-p)/n);
+const avg58=a=>(a.slice(4).reduce((x,y)=>x+y,0)/4);
+
+function renderExp(){const b=EXP.base,p=EXP.proto,pc=x=>(x*100).toFixed(1)+'%';
+ const rows=[['Engagement, weeks 5–8 (avg weekly active)',avg58(b.eng),avg58(p.eng),.60,200*4],['Comprehension (quiz correct)',b.comp,p.comp,.80,b.compN],['Adherence (doses taken)',b.adh,p.adh,.75,200*56]];
+ $('t-exp').innerHTML=`<div class="card"><h2>Experiment: 200 synthetic patients × 8 weeks, seeded (seed 28)</h2><p class="s">Baseline = same generic clinical sentence every week. Prototype = tailored plain-language message with goal, trend and next step. Same patients, same random seed.</p>
+ <div class="tw"><table><tr><th>Metric</th><th>Baseline</th><th>Prototype</th><th>Target</th><th>Result (±95% CI)</th></tr>${rows.map(r=>`<tr><td>${r[0]}</td><td>${pc(r[1])}</td><td>${pc(r[2])} <small>±${(ci(r[2],r[4])*100).toFixed(1)}</small></td><td>≥${pc(r[3])}</td><td class="${r[2]>=r[3]?'ok':'bad'}">${r[2]>=r[3]?'MET':'NOT MET'}</td></tr>`).join('')}</table></div>
+ <p><b>Week-by-week engagement</b></p><div class="tw"><table><tr><th>Week</th>${[1,2,3,4,5,6,7,8].map(w=>'<th>'+w+'</th>').join('')}</tr><tr><td>Baseline</td>${b.eng.map(x=>'<td>'+(x*100).toFixed(0)+'%</td>').join('')}</tr><tr><td>Prototype</td>${p.eng.map(x=>'<td>'+(x*100).toFixed(0)+'%</td>').join('')}</tr></table></div>
+ <h2 style="margin-top:14px">Error analysis</h2><div class="tw"><table><tr><th>Literacy group</th><th>Baseline comprehension</th><th>Prototype comprehension</th></tr>${['Low','Medium','High'].map((n,i)=>`<tr><td>${n}</td><td>${pc(b.tri[i])}</td><td>${pc(p.tri[i])}</td></tr>`).join('')}</table></div>
+ <p>Where it falls short: the lowest-literacy group is the weakest and drags the overall comprehension figure; a text-only message is not enough for them (needs icons, audio or a nurse call). Week-8 engagement is also still decaying, so a novelty effect may be hiding a longer-term drop. <b>Limits:</b> patient behaviour is generated by rules I set, so this shows the design logic works and is measurable. It is not evidence of real-world effect. Replace with pilot data as the next step.</p></div>`}
+
+// ---------- edge-case tests ----------
+function renderTests(){const T=[
+ ['Missing data (9 days)',()=>feedback({consent:true,sys:null,daysSince:9,week:8}).rule==='missing'&&!/good|well done/i.test(feedback({consent:true,sys:null,daysSince:9}).text)],
+ ['Consent withdrawn',()=>{const f=feedback({consent:false,sys:133,adh:6,daysSince:1});return f.rule==='no-consent'&&!/133/.test(f.text)}],
+ ['Impossible reading (412)',()=>{const f=feedback({consent:true,sys:412,daysSince:1});return f.rule==='implausible'&&f.flag&&!/progress/i.test(f.text)}],
+ ['Dangerous reading (196) overrides motivation',()=>{const f=feedback({consent:true,sys:196,daysSince:1});return f.rule==='critical'&&f.lvl==='urgent'}],
+ ['BP rising: no false praise',()=>{const f=feedback({consent:true,sys:140,lastSys:135,adh:5,daysSince:1});return /up by 5/.test(f.text)&&!/Good progress/.test(f.text)}],
+ ['Normal case reaches goal message',()=>/at your goal/.test(feedback({consent:true,sys:128,lastSys:131,adh:7,daysSince:1}).text)]];
+ const rs=T.map(t=>{let ok=false;try{ok=t[1]()}catch(e){}return[t[0],ok]});
+ $('t-test').innerHTML=`<div class="card"><h2>Edge / failure-case tests (run live in your browser)</h2><table><tr><th>Case</th><th>Result</th></tr>${rs.map(r=>`<tr><td>${r[0]}</td><td class="${r[1]?'ok':'bad'}">${r[1]?'PASS':'FAIL'}</td></tr>`).join('')}</table><p><small>${rs.filter(r=>r[1]).length}/${rs.length} passed. Safety rules are ordered: consent → critical → implausible → missing → normal.</small></p></div>`}
+
+// ---------- documentation ----------
+$('t-doc').innerHTML=`<div class="card"><h2>Project documentation (75% draft)</h2>
+<details open><summary>1. Scenario definition</summary><p>Adults with hypertension take a home BP reading daily for 8 weeks after a clinic visit. Clinics are short of time to explain trends. Today patients receive jargon-heavy, generic text. Goal: a feedback app that explains progress in plain language, keeps patients engaged and checking understanding, while respecting consent and showing each role only what it needs.</p></details>
+<details><summary>2. Baseline method</summary><p>Same generic clinical sentence weekly (see below), no personalisation, no comprehension check.</p><div class="msg" style="font-size:14px">${baselineMsg()}</div></details>
+<details><summary>3. Implemented solution</summary><p>Rule-based feedback engine (goal gap, weekly trend, adherence count, reading level ~grade 6), a safety ladder, consent switches, three role views, and an 8-week synthetic simulation. A rule-based design was chosen over an LLM on purpose: outputs are predictable, testable and cannot invent medical advice. An LLM could later rephrase text only, inside the same safety rules.</p></details>
+<details><summary>4. Usability walkthrough (draft)</summary><p>Patient opens app → sees one sentence on where they stand → sees trend and goal line → answers a one-question comprehension check → can turn off sharing at any time. Clinician sees table, rule fired and flags. Admin sees aggregates only. <b>Still to do (the remaining ~25%):</b> run this with 3–5 real people (a nurse, a patient or family member, a peer) and record their comments here.</p></details>
+<details><summary>5. How it could fail in real clinical operations</summary><table><tr><th>Failure</th><th>Consequence</th><th>Mitigation in prototype</th></tr>
+<tr><td>Cuff error / typo reading</td><td>Wrong or alarming advice</td><td>Implausible-range rule, re-measure prompt, clinician flag</td></tr>
+<tr><td>Real emergency reading</td><td>Cheerful message delays care</td><td>Critical rule overrides all; urgent wording</td></tr>
+<tr><td>Patient stops sending data</td><td>App looks "fine" from silence</td><td>Missing-data rule; no praise without data</td></tr>
+<tr><td>Consent withdrawn but data still shown</td><td>Privacy breach</td><td>Consent checked first; clinician/admin views redact</td></tr>
+<tr><td>Alert fatigue for clinicians</td><td>Real flags ignored</td><td>Flags only for critical/implausible; thresholds to tune in pilot</td></tr>
+<tr><td>Low literacy, no smartphone, other language</td><td>Message not understood, inequity</td><td>Comprehension check; plan for audio/translation (not built)</td></tr>
+<tr><td>Message read as medical advice</td><td>Patient changes medication alone</td><td>No dose advice in messages; always points to care team</td></tr></table></details>
+<details><summary>6. Ethics note</summary><p>Data minimisation: only BP, dose count and quiz answers. Consent is granular (feedback / care team / statistics) and revocable. Role-based visibility is enforced in the interface, not only described. Feedback avoids blame and false reassurance. Synthetic data only; no real patient data was used. Bias risk: literacy and language gaps (see error analysis). Prototype is not a medical device and needs clinical governance before any real use.</p></details>
+<details><summary>7. Deployment checklist</summary><ul><li>☐ Clinical safety review of every message template and thresholds</li><li>☐ Data-protection assessment and hosting decision</li><li>☐ Consent wording tested with patients</li><li>☐ Escalation owner and response time for flags agreed</li><li>☐ Accessibility (large text, screen reader, audio, languages)</li><li>☐ Audit log of who saw what</li><li>☐ Pilot with 20–30 real patients; compare with baseline</li><li>☐ Monitoring of engagement, comprehension, flag volume</li><li>☐ Rollback / switch-off plan</li></ul></details>
+<details><summary>8. Remaining work (to reach 100%)</summary><ul><li>Real stakeholder validation (3–5 people) and quotes</li><li>Add screenshots of each role's view</li><li>Tune targets using more seeds (only seed 28 shown)</li><li>Accessibility features: icons/audio for low-literacy group</li></ul></details></div>`;
+
+const TABS=[['t-app','Prototype'],['t-exp','Experiment'],['t-test','Edge cases'],['t-doc','Documentation']];
+$('nav').innerHTML=TABS.map((t,i)=>`<button data-t="${t[0]}" class="${i?'':'on'}">${t[1]}</button>`).join('');
+$('nav').onclick=e=>{const t=e.target.dataset.t;if(!t)return;TABS.forEach(x=>$(x[0]).classList.toggle('hide',x[0]!==t));[...$('nav').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t))};
+['role','scn','wk','c1','c2','c3'].forEach(id=>$(id).addEventListener('input',render));
+render();renderExp();renderTests();
+</script></main></body></html>
